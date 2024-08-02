@@ -7,6 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
 const { type } = require('os');
+const { log } = require('console');
 
 app.use(express.json());
 app.use(cors());
@@ -251,6 +252,128 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
+
+
+//creating endpoint for new collecction data
+
+app.get('/newcollection', async (req, res) => {
+    let products = await Product.find({})
+    let newcollection = products.slice(1).slice(-8);
+    console.log("New Collection fetched");
+    res.send(newcollection);
+})
+
+//popular in women category endpoint
+
+app.get('/popularinwomen', async (req, res) => {
+    let products = await Product.find({ category: "women" });
+    let popularInWomen = products.slice(0, 4);
+    console.log("Popular in Women fetched");
+    res.send(popularInWomen);
+})
+
+
+//middleware for addtocart  function
+const fetchUser = async (req, res, next) => {
+    const token = req.header('auth-token');
+    console.log("Fetching user")
+    if (!token) {
+        res.status(401).send({ error: "token not found" });
+    } else {
+        console.log(token)
+        try {
+            const data = jwt.verify(token, 'secret_ecom');
+            req.user = data.user;
+            next();
+        } catch (error) {
+            console.error("Token verification failed:", error.message); // Log the error message
+            res.status(401).send({ error: "Please authenticate using a valid token" });
+        }
+    }
+}
+
+//endpoint for saving data in cart
+
+app.post('/addtocart', fetchUser, async (req, res) => {
+    try {
+        console.log("added", req.body.itemId)
+
+        // Find the user by ID
+        let userData = await Users.findOne({
+            _id: req.user.id
+        });
+
+        // Increment the item count in the cart
+        userData.cartData[req.body.itemId] = (userData.cartData[req.body.itemId] || 0) + 1;
+
+        // Update the user's cartData in the database
+        await Users.findOneAndUpdate(
+            { _id: req.user.id },
+            { cartData: userData.cartData }
+        );
+
+        // Respond to the client
+        res.json({ success: true, message: "Added to cart" });
+    } catch (error) {
+        console.error("Error in adding to cart:", error);
+        res.status(500).send("Internal server error");
+    }
+});
+
+//endpoint to remove from cart
+app.post('/removefromcart', fetchUser, async (req, res) => {
+    try {
+        console.log("Removing item:", req.body.itemId);
+
+        // Find the user by ID
+        let userData = await Users.findById(req.user.id);
+
+        // Ensure cartData is an object
+        if (!userData.cartData || typeof userData.cartData !== 'object') {
+            return res.status(400).json({ success: false, message: "Cart data is not valid" });
+        }
+
+        // Check if the item exists in the cart and has a count > 0
+        if (userData.cartData[req.body.itemId] && userData.cartData[req.body.itemId] > 0) {
+            // Decrement the item count in the cart
+            userData.cartData[req.body.itemId] -= 1;
+
+            // Update the user's cartData in the database
+            await Users.findByIdAndUpdate(
+                req.user.id,
+                { cartData: userData.cartData }
+            );
+
+            // Respond to the client
+            res.json({ success: true, message: "Removed from cart" });
+        } else {
+            res.status(400).json({ success: false, message: "Item not in cart or quantity is zero" });
+        }
+    } catch (error) {
+        console.error("Error in removing from cart:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+//creating endpoint to get cart dataapp.post('/getcart', fetchUser, async (req,res)=>{
+app.post('/getcart', fetchUser, async (req, res) => {
+    try {
+        console.log("Get Cart for user:", req.user.id);
+        const userData = await Users.findById(req.user.id);
+        console.log("User cart data:", userData.cartData);
+
+        if (userData && userData.cartData) {
+            res.json(userData.cartData);
+        } else {
+            res.status(404).json({ error: "No cart data found" });
+        }
+    } catch (error) {
+        console.error("Error in getting cart:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
 
 app.listen(port, (error) => {
     if (!error) {
