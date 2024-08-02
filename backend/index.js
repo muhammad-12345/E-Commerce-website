@@ -45,7 +45,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 //endpoint to upload the image
-app.use('/images',express.static('upload/images'))
+app.use('/images', express.static('upload/images'))
 app.post("/upload", upload.single('product'), (req, res) => {
     if (req.file) {
         res.json({
@@ -59,57 +59,57 @@ app.post("/upload", upload.single('product'), (req, res) => {
 
 //endpoint for adding product to mogodb atlas
 //schema before adding product to mogodb
-const Product = mongoose.model("Product",{
-    id:{
-        type:Number,
-        required:true,
+const Product = mongoose.model("Product", {
+    id: {
+        type: Number,
+        required: true,
     },
-    name:{
-        type:String,
-        required:true,
+    name: {
+        type: String,
+        required: true,
     },
-    image:{
-        type:String,
-        required:true,
+    image: {
+        type: String,
+        required: true,
     },
-    category:{
-        type:String,
-        required:true,
+    category: {
+        type: String,
+        required: true,
     },
-    new_price:{
-        type:Number,
-        required:true,
+    new_price: {
+        type: Number,
+        required: true,
     },
-    old_price:{
-        type:Number,
-        required:true,
+    old_price: {
+        type: Number,
+        required: true,
     },
-    date:{
-        type:Date,
+    date: {
+        type: Date,
         default: Date.now,
     },
-    available:{
-        type:Boolean,
+    available: {
+        type: Boolean,
         default: true,
     },
 })
 
-app.post('/addproduct', async(req,res)=>{
+app.post('/addproduct', async (req, res) => {
     let products = await Product.find({});
     let id;
-    if(products.length > 0){
+    if (products.length > 0) {
         let last_product = products[products.length - 1];
-            id = last_product.id + 1;
-    }else{
+        id = last_product.id + 1;
+    } else {
         id = 1;  // if there are no products in the database, the id will start from 1
     }
     const product = new Product({
-        id:id,
-        name:req.body.name,
-        image:req.body.image,
-        category:req.body.category,
-        new_price:req.body.new_price,
-        old_price:req.body.old_price,
+        id: id,
+        name: req.body.name,
+        image: req.body.image,
+        category: req.body.category,
+        new_price: req.body.new_price,
+        old_price: req.body.old_price,
     });
     console.log(product);
     await product.save(); // save product in mongodb
@@ -122,19 +122,19 @@ app.post('/addproduct', async(req,res)=>{
 
 //creation API for deleting product
 
-app.post('/removeproduct', async (req,res)=>{
+app.post('/removeproduct', async (req, res) => {
     await Product.findOneAndDelete({
-        id:req.body.id
+        id: req.body.id
     });
     console.log("Removed");
     res.json({
-        success:true,
-        name:req.body.name,
+        success: true,
+        name: req.body.name,
     });
 })
 
 //creating endpoint to display products on frontend
-app.get('/allproducts',async (req,res)=>{
+app.get('/allproducts', async (req, res) => {
     let products = await Product.find({});
     console.log("all products fetched");
     res.send(products);
@@ -143,64 +143,114 @@ app.get('/allproducts',async (req,res)=>{
 
 //user schema
 
-const Users = mongoose.model('Users',{
-    name:{
-        type:String,
-        required:true,
+const Users = mongoose.model('Users', {
+    name: {
+        type: String,
     },
-    email:{
-        type:String,
-        unique:true,
+    email: {
+        type: String,
+        unique: true,
     },
-    password:{
-        type:String,
-        required:true,
+    password: {
+        type: String,
     },
-    cartData:{
-        type:Object,
+    cartData: {
+        type: Object,
     },
-    date:{
-        type:Date,
+    date: {
+        type: Date,
         default: Date.now,
     }
 })
 
 // API to create USER 
 
-app.post('/signup',async (req,res)=>{
-    let check = await Users.findOne({email:req.body.email})
-    if(check){
-        return res.status(400).json({success:false,error:"existing user found with same email Address"})
-    }
+app.post('/signup', async (req, res) => {
+    try {
+        console.log('Request body:', req.body);
 
-    //if no user
-    //then create an empty cart
-    let cart = {};
-    for(let i = 0;i<300;i++){
-        cart[i] = 0; 
-    }
-    //create user
-    const user = new Users({
-        name:req.body.name,
-        email:req.body.email,
-        password:req.body.password,
-        cartData:cart,
-    })
-
-    //save the user in DB
-    await user.save();
-    //use jwt authentication
-    const data={
-        user:{
-            id:user.id,     
+        let check = await Users.findOne({ email: req.body.email });
+        if (check) {
+            return res.status(400).json({ success: false, error: "existing user found with same email Address" })
         }
+
+        //if no user
+        //then create an empty cart
+        let cart = {};
+        for (let i = 0; i < 300; i++) {
+            cart[i] = 0;
+        }
+        //create user
+        const user = new Users({
+            name: req.body.username,
+            email: req.body.email,
+            password: req.body.password,
+            cartData: cart,
+        });
+
+        //save the user in DB
+        await user.save();
+        //use jwt authentication
+        const data = {
+            user: {
+                id: user.id,
+            }
+        };
+        //added salt for unreadable token 
+        const token = jwt.sign(data, 'secret_ecom');
+        res.json({
+            success: true,
+            token
+        });
+    } catch (error) {
+        console.error('Error in /signup:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
-    //added salt for unreadable token 
-    const token = jwt.sign(data, 'secret_ecom');
-    res.json({
-        success:true,token
-    })
-})
+});
+
+
+//endpoint for user login
+
+app.post('/login', async (req, res) => {
+    try {
+        let user = await Users.findOne({
+            email: req.body.email
+        });
+        // If user exists
+        if (user) {
+            const passCompare = req.body.password === user.password;
+            // If password matches
+            if (passCompare) {
+                const data = {
+                    user: {
+                        id: user.id
+                    }
+                };
+                // Generate token
+                const token = jwt.sign(data, 'secret_ecom');
+                res.json({
+                    success: true,
+                    token
+                });
+            } else {
+                // If password is incorrect
+                res.json({
+                    success: false,
+                    error: "Incorrect password"
+                });
+            }
+        } else {
+            // If email does not match
+            res.json({
+                success: false,
+                error: "Email does not match"
+            });
+        }
+    } catch (err) {
+        console.error('Error in /login:', err);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
 
 app.listen(port, (error) => {
     if (!error) {
